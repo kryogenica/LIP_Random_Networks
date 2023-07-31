@@ -3,7 +3,7 @@ r"""Algorithm to find balanced equivalence relations and lattices.
 
 Copyright 2010-2020 by Hiroko Kamei & Peter Cock.  All rights reserved.
 
-Version 1.0.0 of this code was a standalone Python script provided as a
+
 supplementary file for the manuscript:
 
     Hiroko Kamei and Peter Cock (2013) "Computation of Balanced Equivalence
