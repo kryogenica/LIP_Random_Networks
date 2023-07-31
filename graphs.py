@@ -3,6 +3,7 @@ r"""Algorithm to find balanced equivalence relations and lattices.
 
 Copyright 2010-2020 by Hiroko Kamei & Peter Cock.  All rights reserved.
 
+Test github
 
 supplementary file for the manuscript:
 
