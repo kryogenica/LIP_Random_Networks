@@ -178,8 +178,12 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dic
     #dictionary to hold variables
     rvars = {'re':remove_edge,'nb_p':node_balance_pos,\
              'nb_n':node_balance_neg,'m_nb':max_nodebalance,\
-                 'ae':add_edge,'sb':strict_balance,
-                 "w_m":weight_mods,'n_w':new_weights}
+                 'ae':add_edge,'sb':strict_balance}
+    
+    if WeightFlag:
+        rvars['w_m']=weight_mods
+        rvars['n_w']=new_weights
+        
 
     #constraint: colors in-balanced
     color_balance = []
@@ -217,34 +221,33 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dic
             #                         ) for (p,q) in colorpairs), name='color_balance'))
             for (p,q) in colorpairs:
                 #A and B are lists of removed and added edges into p
-                A = list((1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
-                B = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in D)
+                relist_p = list((1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
+                aelist_p = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in D)
                 
                 if WeightFlag:
-                    A = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
-                    #Following notation, C is the list of weight_mods into p, D is the new weights into p
-                    C = list(weight_mods[i,j] for (i,j) in Edges if j == p)
-                    D = list(new_weights[i,j] for (i,j) in Edges if j == p)              
+                    relist_p = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
+                    #Fcreating the list of weight_mods into p, D is the new weights into p
+                    wmlist_p = list(weight_mods[i,j] for (i,j) in Edges if j == p)
+                    nwlist_p = list(new_weights[i,j] for (i,j) in Edges if j == p)              
                 
                 
-                #a and b are lists of removed and addededges into q
-                #c is the list of weight mods into q, d is the new weights into q
-                a = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
-                b = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in D)
+                #creating analogous lists for q
+                relist_q = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
+                aelist_q = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in D)
                 if WeightFlag:
-                    a = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
-                    c = list(weight_mods[i,j] for (i,j) in Edges if j == q)
-                    d = list(new_weights[i,j] for (i,j) in Edges if j == q)
+                    relist_q = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
+                    wmlist_q = list(weight_mods[i,j] for (i,j) in Edges if j == q)
+                    nwlist_q = list(new_weights[i,j] for (i,j) in Edges if j == q)
                 
 
                 if WeightFlag: 
-                    color_balance.append((quicksum(A) + quicksum(C) + quicksum(D)== \
-                                          quicksum(a) + quicksum(c) + quicksum(d)), \
+                    color_balance.append((quicksum(relist_p) + quicksum(wmlist_p) + quicksum(nwlist_p)== \
+                                          quicksum(relist_q) + quicksum(wmlist_q) + quicksum(nwlist_q)), \
                                          name='color_balance'+str(p)+'_'+str(q))
                         
                     
                 else:
-                    color_balance.append(rmip.addConstr((quicksum(A) + quicksum(B) == quicksum(a) + quicksum(b)), name='color_balance'+str(p)+'_'+str(q)))
+                    color_balance.append(rmip.addConstr((quicksum(relist_p) + quicksum(aelist_p) == quicksum(relist_q) + quicksum(aelist_q)), name='color_balance'+str(p)+'_'+str(q)))
 
 
                 
@@ -253,22 +256,30 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dic
             for p in C:
                 for q in D:
                     for c in colordict.keys():
-                        #A and B are lists of removed and added edges into p
-                        A = list((1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in colordict[c])
-                        B = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in colordict[c])
-                        #Following notation, C is the list of weight_mods into p, D is the new weights into p
-                        C = list(weight_mods[i,j] for (i,j) in Edges if j == p and i in colordict[c])
-                        D = list(new_weights[i,j] for (i,j) in Edges if j == p and i in colordict[c])
+                        #creating lists of removed and added edges into p
+                        relist_p = list((1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in colordict[c])
+                        aelist_p = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in colordict[c])
+                        if WeightFlag:
+                        #creating the list of weight_mods into p, D is the new weights into p
+                            relist_p = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
+                            wmlist_p = list(weight_mods[i,j] for (i,j) in Edges if j == p and i in colordict[c])
+                            nwlist_p = list(new_weights[i,j] for (i,j) in Edges if j == p and i in colordict[c])
 
                         #a and b are lists of removed and addededges into q
                         #c is the list of weight mods into q, d is the new weights into q
-                        a = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in colordict[c])
-                        b = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in colordict[c])
-                        c = list(weight_mods[i,j] for (i,j) in Edges if j == q and i in colordict[c])
-                        d = list(new_weights[i,j] for (i,j) in Edges if j == q and i in colordict[c])
+                        relist_q = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in colordict[c])
+                        aelist_q = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in colordict[c])
+                        if WeightFlag:
+                            relist_q = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
+                            wmlist_q = list(weight_mods[i,j] for (i,j) in Edges if j == q and i in colordict[c])
+                            nwlist_q = list(new_weights[i,j] for (i,j) in Edges if j == q and i in colordict[c])
                         
-                        color_imbalance.append(rmip.addConstr((quicksum(A) + quicksum(B) >= quicksum(a) + quicksum(b) + strict_balance[p,q,c] - n*strict_balance[q,p,c]), name='imbalance_'+str(p)+'_'+str(q)+'_'+str(c)))
-                        color_imbalance.append(rmip.addConstr((quicksum(a) + quicksum(b) >= quicksum(A) + quicksum(B) + strict_balance[q,p,c] - n*strict_balance[p,q,c]), name='imbalance_'+str(q)+'_'+str(p)+'_'+str(c)))
+                        color_imbalance.append(rmip.addConstr((quicksum(relist_p) + quicksum(aelist_p) >= \
+                                                               quicksum(relist_q) + quicksum(aelist_q) + \
+                                                               strict_balance[p,q,c] - n*strict_balance[q,p,c]), name='imbalance_'+str(p)+'_'+str(q)+'_'+str(c)))
+                        color_imbalance.append(rmip.addConstr((quicksum(relist_q) + quicksum(aelist_q) >= \
+                                                               quicksum(relist_p) + quicksum(aelist_p) + \
+                                                               strict_balance[q,p,c] - n*strict_balance[p,q,c]), name='imbalance_'+str(q)+'_'+str(p)+'_'+str(c)))
                         
                         # color_imbalance.append(rmip.addConstrs(((quicksum((1-remove_edge[i,j]) for (i,j) in Edges \
                         #                                  if j == p and i in colordict[c]) \
@@ -303,8 +314,8 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dic
                     #                                      strict_balance[q,p,i]) for i in colordict.keys()),name='one_imbalance_'+str(p)+'_'+str(q)))
                     
                     # David                        
-                    A = list(strict_balance[p,q,i] + strict_balance[q,p,i] for i in colordict.keys())
-                    atleast_one.append(rmip.addConstr(quicksum(A) >= 1),name='atleast_one_'+str(p)+'_'+str(q))
+                    sblist = list(strict_balance[p,q,i] + strict_balance[q,p,i] for i in colordict.keys())
+                    atleast_one.append(rmip.addConstr((quicksum(sblist) >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
                     
                     
                     #this code will reject a correct solution 
@@ -581,12 +592,12 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
 #                     write_one_solution(gpath,cpath,rm_weight,add_weight,outfile,HardFlag)
  
 
-#testpath = '/Users/phillips/Documents/test/DIRECTEDV1.graph.txt'
-#colorpath = '/Users/phillips/Documents/test/Names.colors.txt'
-#outpath = '/Users/phillips/Documents/test/out.txt'
-#HardFlag = True
-#InDegOneFlag=True
-#RMOnly = True
-#prohibit=None
-#A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,False)
- 
+testpath = '/Users/phillips/Documents/test/DIRECTEDV1.graph.txt'
+colorpath = '/Users/phillips/Documents/test/Names.colors.txt'
+outpath = '/Users/phillips/Documents/test/out.txt'
+HardFlag = True
+InDegOneFlag=True
+RMOnly = True
+prohibit=None
+A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,False)
+solve_and_write(testpath,colorpath,1,1,outpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,Save_info=False,NetX=True)
