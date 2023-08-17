@@ -302,18 +302,20 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dic
                     # one_imbalance.append(rmip.addConstrs(((1 >= strict_balance[p,q,i] + \
                     #                                      strict_balance[q,p,i]) for i in colordict.keys()),name='one_imbalance_'+str(p)+'_'+str(q)))
                     
-                    # David                         
-                    #atleast_one.append(rmip.addConstr((sum(strict_balance[p,q,i] for i in colordict.keys()) +\
-                     #                              sum(strict_balance[q,p,i] for i in colordict.keys()) >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
+                    # David                        
+                    A = list(strict_balance[p,q,i] + strict_balance[q,p,i] for i in colordict.keys())
+                    atleast_one.append(rmip.addConstr(quicksum(A) >= 1),name='atleast_one_'+str(p)+'_'+str(q))
                     
-                    A = list(strict_balance[p,q,i] - strict_balance[q,p,i] for i in inner_imbalance_dict[p][q])
-                    rmip.addConstr(auxiliary_var_1[counter] == quicksum(A))
-                    rmip.addConstr(auxiliary_var_2[counter] == abs_(auxiliary_var_1[counter]))
                     
-                    B = list(strict_balance[p,q,i] + strict_balance[q,p,i] for i in outter_imbalance_dict[p][q])
-                    atleast_one.append(rmip.addConstr((quicksum(B) +\
-                                       auxiliary_var_2[counter] >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
-                    counter=counter+1
+                    #this code will reject a correct solution 
+                    #A = list(strict_balance[p,q,i] - strict_balance[q,p,i] for i in inner_imbalance_dict[p][q])
+                    #rmip.addConstr(auxiliary_var_1[counter] == quicksum(A))
+                    #rmip.addConstr(auxiliary_var_2[counter] == abs_(auxiliary_var_1[counter]))
+                    
+                    #B = list(strict_balance[p,q,i] + strict_balance[q,p,i] for i in outter_imbalance_dict[p][q])
+                    #atleast_one.append(rmip.addConstr((quicksum(B) +\
+                    #                   auxiliary_var_2[counter] >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
+                    #counter=counter+1
 
     else:
         for D in colorsets:
@@ -579,5 +581,12 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
 #                     write_one_solution(gpath,cpath,rm_weight,add_weight,outfile,HardFlag)
  
 
-
+#testpath = '/Users/phillips/Documents/test/DIRECTEDV1.graph.txt'
+#colorpath = '/Users/phillips/Documents/test/Names.colors.txt'
+#outpath = '/Users/phillips/Documents/test/out.txt'
+#HardFlag = True
+#InDegOneFlag=True
+#RMOnly = True
+#prohibit=None
+#A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,False)
  
