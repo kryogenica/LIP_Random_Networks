@@ -373,7 +373,7 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dic
     return rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg
 
 def set_rmip(graphpath,colorpath,HardFlag,\
-                 FixedEdges,FixedNonEdges,InDegOneFlag,RMOnly,prohibit,WeightFlag):
+                 FixedEdges,FixedNonEdges,InDegOneFlag,RMOnly,prohibit,WeightFlag=False):
 
     
     #create the inputs
@@ -599,5 +599,5 @@ HardFlag = True
 InDegOneFlag=True
 RMOnly = True
 prohibit=None
-A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,False)
+A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit)
 solve_and_write(testpath,colorpath,1,1,outpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,Save_info=False,NetX=True)
