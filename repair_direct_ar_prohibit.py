@@ -14,10 +14,10 @@ import time
 epsilon = .001
 
 #percentage of edge weights allowed for weight_mods to be 
-WM_perc = .7
+WM_perc = 1
 
 #this might need to be set in readdata. Right now a fixed constant
-NW_bound = 8
+NW_bound = 100
 
 charsep='\t'
 
@@ -152,7 +152,9 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
     if WeightFlag:
         #these are modifications to the current weight, assumed integer
         weight_mods = rmip.addVars(Edges,vtype=GRB.INTEGER,name='weight_mods')
-    
+        weight_mods_abs = rmip.addVars(Edges,lb=0,vtype=GRB.INTEGER,name='weight_mods_abs')
+        max_weight = max(EdgeWeights.values())
+
     #these are variables representing potential positive or negative color balances
     #not used if HardFlag=True
     node_balance_pos = rmip.addVars(colorpairs,lb=0.0,vtype=GRB.CONTINUOUS,name='node_balance_pos')
@@ -183,6 +185,7 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
     if WeightFlag:
         rvars['w_m']=weight_mods
         rvars['n_w']=new_weights
+        rvars['w_m_a']=weight_mods_abs
         
 
     #constraint: colors in-balanced
@@ -196,9 +199,11 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
         weight_lbs = []
         weight_ubs = []
         newwts_bd = []
+        weight_abs_cons=[]
         weight_lbs.append(rmip.addConstrs(weight_mods[i,j]) >= -WM_perc*EdgeWeights[i,j] for [i,j] in Edges)
         weight_ubs.append(rmip.addConstrs(weight_mods[i,j]) <= WM_perc*EdgeWeights[i,j] for [i,j] in Edges)
-        newwts_bd.append(rmip.addConstrs(new_weights[i,j] <= NW_bound for (i,j) in Edges))
+        weight_abs_cons.append(rmip.addConstrs(weight_mods_abs[i,j]) == abs_(weight_mods[i,j]) for [i,j] in Edges)
+        newwts_bd.append(rmip.addConstrs(new_weights[i,j] <= max_weight for (i,j) in NotEdges))
         
         
     #aux=[]
@@ -228,7 +233,7 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
                     relist_p = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
                     #Fcreating the list of weight_mods into p, D is the new weights into p
                     wmlist_p = list(weight_mods[i,j] for (i,j) in Edges if j == p)
-                    nwlist_p = list(new_weights[i,j] for (i,j) in Edges if j == p)              
+                    nwlist_p = list(new_weights[i,j] for (i,j) in NotEdges if j == p)              
                 
                 
                 #creating analogous lists for q
@@ -237,21 +242,21 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
                 if WeightFlag:
                     relist_q = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
                     wmlist_q = list(weight_mods[i,j] for (i,j) in Edges if j == q)
-                    nwlist_q = list(new_weights[i,j] for (i,j) in Edges if j == q)
+                    nwlist_q = list(new_weights[i,j] for (i,j) in NotEdges if j == q)
                 
 
                 if WeightFlag: 
-                    color_balance.append((quicksum(relist_p) + quicksum(wmlist_p) + quicksum(nwlist_p)== \
-                                          quicksum(relist_q) + quicksum(wmlist_q) + quicksum(nwlist_q)), \
-                                         name='color_balance'+str(p)+'_'+str(q))
+                    color_balance.append(rmip.addConstr(quicksum(relist_p) + quicksum(wmlist_p) + quicksum(nwlist_p)== \
+                                          quicksum(relist_q) + quicksum(wmlist_q) + quicksum(nwlist_q), \
+                                         name='color_balance'+str(p)+'_'+str(q)))
                         
                     
                 else:
                     color_balance.append(rmip.addConstr((quicksum(relist_p) + quicksum(aelist_p) == quicksum(relist_q) + quicksum(aelist_q)), name='color_balance'+str(p)+'_'+str(q)))
 
 
-                
-        counter=0
+                       
+        #counter=0
         for C,D in itools.combinations(colorsets,2):
             for p in C:
                 for q in D:
@@ -263,7 +268,7 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
                         #creating the list of weight_mods into p, D is the new weights into p
                             relist_p = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
                             wmlist_p = list(weight_mods[i,j] for (i,j) in Edges if j == p and i in colordict[c])
-                            nwlist_p = list(new_weights[i,j] for (i,j) in Edges if j == p and i in colordict[c])
+                            nwlist_p = list(new_weights[i,j] for (i,j) in NotEdges if j == p and i in colordict[c])
 
                         #a and b are lists of removed and addededges into q
                         #c is the list of weight mods into q, d is the new weights into q
@@ -272,14 +277,24 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
                         if WeightFlag:
                             relist_q = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
                             wmlist_q = list(weight_mods[i,j] for (i,j) in Edges if j == q and i in colordict[c])
-                            nwlist_q = list(new_weights[i,j] for (i,j) in Edges if j == q and i in colordict[c])
+                            nwlist_q = list(new_weights[i,j] for (i,j) in NotEdges if j == q and i in colordict[c])
                         
-                        color_imbalance.append(rmip.addConstr((quicksum(relist_p) + quicksum(aelist_p) >= \
-                                                               quicksum(relist_q) + quicksum(aelist_q) + \
-                                                               strict_balance[p,q,c] - n*strict_balance[q,p,c]), name='imbalance_'+str(p)+'_'+str(q)+'_'+str(c)))
-                        color_imbalance.append(rmip.addConstr((quicksum(relist_q) + quicksum(aelist_q) >= \
-                                                               quicksum(relist_p) + quicksum(aelist_p) + \
-                                                               strict_balance[q,p,c] - n*strict_balance[p,q,c]), name='imbalance_'+str(q)+'_'+str(p)+'_'+str(c)))
+                        
+                        if WeightFlag:
+                            color_imbalance.append(rmip.addConstr((quicksum(relist_p) + quicksum(wmlist_p) + quicksum(nwlist_p) >= \
+                                                                   quicksum(relist_q) + quicksum(wmlist_q) + quicksum(nwlist_q) + \
+                                                                   strict_balance[p,q,c] - n*max_weight*strict_balance[q,p,c]), name='imbalance_'+str(p)+'_'+str(q)+'_'+str(c)))
+                            color_imbalance.append(rmip.addConstr((quicksum(relist_q) + quicksum(wmlist_q) + quicksum(nwlist_q) >= \
+                                                                   quicksum(relist_p) + quicksum(wmlist_p) + quicksum(nwlist_p) + \
+                                                                   strict_balance[q,p,c] - n*max_weight*strict_balance[p,q,c]), name='imbalance_'+str(q)+'_'+str(p)+'_'+str(c)))
+                            
+                        else:
+                            color_imbalance.append(rmip.addConstr((quicksum(relist_p) + quicksum(aelist_p) >= \
+                                                                   quicksum(relist_q) + quicksum(aelist_q) + \
+                                                                   strict_balance[p,q,c] - n*strict_balance[q,p,c]), name='imbalance_'+str(p)+'_'+str(q)+'_'+str(c)))
+                            color_imbalance.append(rmip.addConstr((quicksum(relist_q) + quicksum(aelist_q) >= \
+                                                                   quicksum(relist_p) + quicksum(aelist_p) + \
+                                                                   strict_balance[q,p,c] - n*strict_balance[p,q,c]), name='imbalance_'+str(q)+'_'+str(p)+'_'+str(c)))
                         
                         # color_imbalance.append(rmip.addConstrs(((quicksum((1-remove_edge[i,j]) for (i,j) in Edges \
                         #                                  if j == p and i in colordict[c]) \
@@ -333,7 +348,7 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
                     #atleast_one.append(rmip.addConstr((quicksum(B) +\
                     #                   auxiliary_var_2[counter] >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
                     #counter=counter+1
-
+        
     else:
         for D in colorsets:
             color_balance.append(rmip.addConstrs((sum((1-remove_edge[i,j]) for (i,j) in Edges \
@@ -399,7 +414,9 @@ def set_rmip(graphpath,colorpath,HardFlag,\
 
     return rmip,rcons,rvars,setdict,colorsets,remove_edge,add_edge,node_balance_pos,node_balance_neg
 
-def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg,rm_weight,add_weight,HardFlag,WeightFlag,bal_weight=1):
+def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,\
+                  node_balance_neg,rm_weight,add_weight,HardFlag,WeightFlag,\
+                      wm_weight=1,nw_weight=1,bal_weight=1):
     
     #need objective
     if HardFlag:
@@ -408,8 +425,17 @@ def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_ba
         # rmip.addConstr(w >= rm_weight * gp.quicksum(remove_edge.select('*','*')) - add_weight * gp.quicksum(add_edge.select('*','*')))
         # rmip.addConstr(w >= - rm_weight * gp.quicksum(remove_edge.select('*','*')) + add_weight * gp.quicksum(add_edge.select('*','*')))
         
-        obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
-            add_weight*gp.quicksum(add_edge.select('*','*'))
+        if WeightFlag:
+            weight_mods_abs  = rvars['w_m_a']
+            new_weights = rvars['n_w']
+            
+            obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
+                add_weight*gp.quicksum(add_edge.select('*','*')) + \
+                wm_weight*gp.quicksum(weight_mods_abs.select('*','*')) + \
+                nw_weight*gp.quicksum(new_weights.select('*','*'))
+        else:
+            obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
+                add_weight*gp.quicksum(add_edge.select('*','*'))
     
     else:
         obj = (epsilon + rm_weight)*(gp.quicksum(remove_edge.select('*','*'))) + \
@@ -435,9 +461,12 @@ def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_ba
 def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
                        rvars,setdict,colorsets,remove_edge,add_edge,node_balance_pos,node_balance_neg,\
                        HardFlag=True,FixedEdges=[],FixedNonEdges=[],InDegOneFlag=True,\
-                       RMOnly=False,prohibit=None,Save_info=True,NetX=False,WeightFlag=False):
+                       RMOnly=False,prohibit=None,Save_info=True,NetX=False,WeightFlag=False,wm_weight=1,nw_weight=1):
     
-    rmip,rcons,rvars,executionTime = rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg,rm_weight,add_weight,HardFlag,WeightFlag,bal_weight=1)
+    rmip,rcons,rvars,executionTime = rmip_optimize(rmip,rcons,rvars,remove_edge,\
+                                                   add_edge,node_balance_pos,\
+                                                   node_balance_neg,rm_weight,add_weight,\
+                                                   HardFlag,WeightFlag,wm_weight,nw_weight,bal_weight=1)
     
     
     #find the edge removes
@@ -605,5 +634,11 @@ HardFlag = True
 InDegOneFlag=True
 RMOnly = True
 prohibit=None
-A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,True,False)
-solve_and_write(testpath,colorpath,1,1,outpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,Save_info=False,NetX=True)
+#A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,True,False)
+#solve_and_write(testpath,colorpath,1,1,outpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,Save_info=False,NetX=True)
+
+testwpath = '/Users/phillips/Documents/test/Cook_chem_back.graph.txt'
+wcolorpath = '/Users/phillips/Documents/test/Modularity_Maximization-LoS-Bryant_var_9.colors.txt'
+woutpath = '/Users/phillips/Documents/test/outw.txt'
+A,B,C,D,E,F,G,H,I = set_rmip(testwpath,wcolorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,WeightFlag=True,StrongMinFlag=False)
+solve_and_write(testwpath,wcolorpath,1,1,woutpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,WeightFlag=True,Save_info=False,NetX=True)
