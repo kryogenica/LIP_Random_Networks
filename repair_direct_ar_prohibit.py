@@ -105,15 +105,13 @@ def readdata(fname,colorfile,xlinks=None):
                 
                 
 
+    #NodePairs is all pairs of nodes in both directions as we're using 
+    #directed graphs
     NodePairs = []
-    AllPairs = []
     for p in Nodes:
         for q in Nodes:
             if p != q:
-                AllPairs.append((p,q))
-                #node pairs only once
-                if (p,q) not in NodePairs and (q,p) not in NodePairs:
-                    NodePairs.append((p,q))
+                NodePairs.append((p,q))
     
     if xlinks!=None:
         prohibited = pd.read_csv(xlinks,sep=charsep,index_col=[0,1],header=None)
@@ -172,8 +170,8 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
     
     #Bryant modified -- djp still needs to verify
     strict_balance = rmip.addVars(nc_tuples,vtype=GRB.BINARY,name='strict_balance')
-    auxiliary_var_1 = rmip.addVars(support_num,lb=-2,ub=2,vtype=GRB.SEMIINT,name='out_imbalance_one')
-    auxiliary_var_2 = rmip.addVars(support_num,lb=-2,ub=2,vtype=GRB.SEMIINT,name='out_imbalance_two')
+    #auxiliary_var_1 = rmip.addVars(support_num,lb=-2,ub=2,vtype=GRB.SEMIINT,name='out_imbalance_one')
+    #auxiliary_var_2 = rmip.addVars(support_num,lb=-2,ub=2,vtype=GRB.SEMIINT,name='out_imbalance_two')
 
     
     
@@ -637,8 +635,11 @@ prohibit=None
 #A,B,C,D,E,F,G,H,I = set_rmip(testpath,colorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,True,False)
 #solve_and_write(testpath,colorpath,1,1,outpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,Save_info=False,NetX=True)
 
-testwpath = '/Users/phillips/Documents/test/Cook_chem_back.graph.txt'
-wcolorpath = '/Users/phillips/Documents/test/Modularity_Maximization-LoS-Bryant_var_9.colors.txt'
+#testwpath = '/Users/phillips/Documents/test/Cook_chem_back.graph.txt'
+#wcolorpath = '/Users/phillips/Documents/test/Modularity_Maximization-LoS-Bryant_var_9.colors.txt'
+#woutpath = '/Users/phillips/Documents/test/outw.txt'
+testwpath = '/Users/phillips/Documents/test/small_test.txt'
+wcolorpath = '/Users/phillips/Documents/test/small.colors.txt'
 woutpath = '/Users/phillips/Documents/test/outw.txt'
 A,B,C,D,E,F,G,H,I = set_rmip(testwpath,wcolorpath,HardFlag,[],[],InDegOneFlag,False,prohibit,WeightFlag=True,StrongMinFlag=False)
-solve_and_write(testwpath,wcolorpath,1,1,woutpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,WeightFlag=True,Save_info=False,NetX=True)
+solve_and_write(testwpath,wcolorpath,1,1,woutpath,A,B,C,D,E,F,G,H,I,HardFlag,[],[],InDegOneFlag,RMOnly,prohibit,WeightFlag=True,Save_info=True,NetX=True)
