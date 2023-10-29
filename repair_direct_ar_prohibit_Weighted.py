@@ -476,6 +476,13 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
     re = rvars['re']
     ae = rvars['ae']
     sb = rvars['sb']
+    
+    
+    if WeightFlag:
+        w_m=rvars['w_m'] #weight modifications
+        n_w=rvars['n_w'] #new weights
+        w_m_a=rvars['w_m_a'] #absolute value of weight modificartions
+    
     sumremovals = 0
     sumadds = 0
     idealnum=len(colorsets)
