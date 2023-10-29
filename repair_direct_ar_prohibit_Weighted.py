@@ -499,14 +499,14 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
             for (i,j) in E:
                 if abs(re[i,j].x - 1) > epsilon:
                     if WeightFlag:
-                        G_result.add_edge(i,j,weight=EW[i,j]+w_m[i,j])
+                        G_result.add_edge(i,j,weight=EW[i,j] +w_m[i,j].x)
                     else:
                         G_result.add_edge(i, j)
     
             for (i,j) in NE:
                 if abs(ae[i,j].x - 1) < epsilon:
                     if WeightFlag:
-                        G_result.add_edge(i,j,weight=n_w[i,j])
+                        G_result.add_edge(i,j,weight=n_w[i,j].x)
                     else:
                         G_result.add_edge(i, j)
     
