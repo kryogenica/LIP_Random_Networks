@@ -402,6 +402,9 @@ def set_rmip(graphpath,colorpath,HardFlag,\
     #set dictionary
     setdict = {'N':Nodes,'E':Edges,'CP':ColorPairs,'NE':NotEdges,'cd':colordict}
     
+    if WeightFlag:
+        setdict['EW'] = EdgeWeights
+    
     #initialize an environment
     env = gp.Env()
     
@@ -479,6 +482,7 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
     
     
     if WeightFlag:
+        EW = setdict['EW']
         w_m=rvars['w_m'] #weight modifications
         n_w=rvars['n_w'] #new weights
         w_m_a=rvars['w_m_a'] #absolute value of weight modificartions
@@ -494,11 +498,17 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
         if feasible:
             for (i,j) in E:
                 if abs(re[i,j].x - 1) > epsilon:
-                    G_result.add_edge(i, j)
+                    if WeightFlag:
+                        G_result.add_edge(i,j,weight=EW[i,j]+w_m[i,j])
+                    else:
+                        G_result.add_edge(i, j)
     
             for (i,j) in NE:
                 if abs(ae[i,j].x - 1) < epsilon:
-                    G_result.add_edge(i, j)
+                    if WeightFlag:
+                        G_result.add_edge(i,j,weight=n_w[i,j])
+                    else:
+                        G_result.add_edge(i, j)
     
     if Save_info==True:
         outfname = fname+"directed.output.txt"
