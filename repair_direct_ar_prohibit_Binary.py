@@ -13,6 +13,11 @@ import time
 ##precision parameter
 epsilon = .001
 
+#add and remove flags
+ADDONLY = 1
+RMONLY = 2
+BOTHADDRM = 3
+
 charsep='\t'
 
 def get_key_from_value(dictionary, value):
@@ -134,7 +139,7 @@ def readdata(fname,colorfile,xlinks=None):
     ##create a MIP
 def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imbalance_dict,support_num,env, \
                Imbalance,NotEdges,colordict,nc_tuples,HardFlag,\
-               FixedEdges,FixedNonEdges,RMOnly,InDegOneFlag):
+               FixedEdges,FixedNonEdges,AddRemoveFlag,InDegOneFlag):
     
     
     rmip = gp.Model(name='RepairKnown-Directed',env=env)
@@ -273,9 +278,14 @@ def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imba
     for (i,j) in FixedNonEdges:
         FNElist.append(rmip.addConstr(add_edge[i,j]==0))        
 
-    if RMOnly:
+    if AddRemoveFlag == RMONLY:
         for (i,j) in NotEdges:
             FElist.append(rmip.addConstr(add_edge[i,j]==0))
+
+    if AddRemoveFlag == ADDONLY:
+        for (i,j) in Edges:
+            FElist.append(rmip.addConstr(remove_edge[i,j]==0))
+
     
     #keep track of edges/potential edges that are perturbed
     nodebalance_bounds_p = rmip.addConstrs((node_balance_pos[p,q] <= max_nodebalance \
@@ -296,7 +306,7 @@ def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imba
     return rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg
 
 def set_rmip(graphpath,colorpath,Imbalance,HardFlag,\
-                 FixedEdges,FixedNonEdges,InDegOneFlag,RMOnly,prohibit):
+                 FixedEdges,FixedNonEdges,InDegOneFlag,AddRemoveFlag,prohibit):
 
     
     #create the inputs
@@ -311,7 +321,7 @@ def set_rmip(graphpath,colorpath,Imbalance,HardFlag,\
     
     #create the model
     rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg = CreateRMIP(Nodes,Edges,ColorPairs,colorsets,outter_imbalance_dict,inner_imbalance_dict,support_num,env,\
-                   Imbalance,NotEdges,colordict,nc_tuples,HardFlag,FixedEdges,FixedNonEdges,RMOnly,InDegOneFlag)
+                   Imbalance,NotEdges,colordict,nc_tuples,HardFlag,FixedEdges,FixedNonEdges,AddRemoveFlag,InDegOneFlag)
 
 
     return rmip,rcons,rvars,setdict,colorsets,remove_edge,add_edge,node_balance_pos,node_balance_neg
