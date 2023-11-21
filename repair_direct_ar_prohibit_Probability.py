@@ -1,5 +1,4 @@
 
-
 import networkx as nx
 import gurobipy as gp
 from gurobipy import GRB
@@ -25,7 +24,7 @@ def get_key_from_value(dictionary, value):
         if value in val:
             return key
 
-def readdata(fname,colorfile,xlinks=None):
+def readdata(fname,colorfile,DefaultNE_weight,xlinks=None):
     
     #load starting network
     GraphData = pd.read_csv(fname,sep=charsep,index_col=[0,1],header=None)
@@ -127,18 +126,20 @@ def readdata(fname,colorfile,xlinks=None):
         
         avoid_Edges,EdgeWeights = gp.multidict(Edges_to_avoid)
         
-        NotE = {(p,q):1 for (p,q) in AllPairs if (p,q) not in avoid_Edges}
+        NotE = {(p,q):DefaultNE_weight for (p,q) in AllPairs if (p,q) not in avoid_Edges}
         NotEdges,NEWeights = gp.multidict(NotE)
         
     else:
-        NotE = {(p,q):1 for (p,q) in AllPairs if (p,q) not in Edges}
+        NotE = {(p,q):DefaultNE_weight for (p,q) in AllPairs if (p,q) not in Edges}
         NotEdges,NEWeights = gp.multidict(NotE)
     
-    return Nodes,Edges,colorpairs,colorsets,NotEdges,colordict,nc_tuples,outter_imbalance_dict,inner_imbalance_dict, support_num
+    return Nodes,Edges,EdgeWeights,colorpairs,colorsets,NotEdges,NEWeights,colordict,nc_tuples,\
+            outter_imbalance_dict,inner_imbalance_dict, support_num
 
     ##create a MIP
-def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imbalance_dict,support_num,env, \
-               Imbalance,NotEdges,colordict,nc_tuples,HardFlag,\
+def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outter_imbalance_dict,\
+               inner_imbalance_dict,support_num,env, \
+               Imbalance,NotEdges,NEWeights,colordict,nc_tuples,HardFlag,\
                FixedEdges,FixedNonEdges,AddRemoveFlag,InDegOneFlag):
     
     
@@ -156,9 +157,7 @@ def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imba
         auxiliary_var_1 = rmip.addVars(support_num,lb=-2,ub=2,vtype=GRB.SEMIINT,name='out_imbalance_one')
         auxiliary_var_2 = rmip.addVars(support_num,lb=-2,ub=2,vtype=GRB.SEMIINT,name='out_imbalance_two')
 
-    
-    
-    
+
     rvars = {'re':remove_edge,'nb_p':node_balance_pos,\
              'nb_n':node_balance_neg,'m_nb':max_nodebalance,\
                  'ae':add_edge,'sb':strict_balance}
@@ -194,7 +193,9 @@ def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imba
                 B = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in D)
                 a = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
                 b = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in D)
-                color_balance.append(rmip.addConstr((quicksum(A) + quicksum(B) == quicksum(a) + quicksum(b)), name='color_balance'+str(p)+'_'+str(q)))
+                color_balance.append(rmip.addConstr((quicksum(A) + quicksum(B) \
+                                                     == quicksum(a) + quicksum(b)), \
+                                                    name='color_balance'+str(p)+'_'+str(q)))
                 
         counter=0
         for C,D in itools.combinations(colorsets,2):
@@ -306,53 +307,44 @@ def CreateRMIP(Nodes,Edges,colorpairs,colorsets,outter_imbalance_dict,inner_imba
     return rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg
 
 def set_rmip(graphpath,colorpath,Imbalance,HardFlag,\
-                 FixedEdges,FixedNonEdges,InDegOneFlag,AddRemoveFlag,prohibit):
+                 FixedEdges,FixedNonEdges,InDegOneFlag,AddRemoveFlag,prohibit,\
+                     DefaultNE_weight=1):
 
     
     #create the inputs
-    Nodes,Edges,ColorPairs,colorsets,NotEdges,colordict,nc_tuples,outter_imbalance_dict,inner_imbalance_dict,support_num = \
-        readdata(graphpath,colorpath,prohibit)
+    Nodes,Edges,EdgeWeights,ColorPairs,colorsets,NotEdges,NEWeights,colordict,nc_tuples,\
+        outter_imbalance_dict,inner_imbalance_dict,support_num = \
+        readdata(graphpath,colorpath,DefaultNE_weight,prohibit)
     
     #set dictionary
-    setdict = {'N':Nodes,'E':Edges,'CP':ColorPairs,'NE':NotEdges,'cd':colordict}
+    setdict = {'N':Nodes,'E':Edges,'CP':ColorPairs,'NE':NotEdges,'cd':colordict,
+               'E_W':EdgeWeights,'NE_W':NEWeights}
     
     #initialize an environment
     env = gp.Env()
     
     #create the model
-    rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg = CreateRMIP(Nodes,Edges,ColorPairs,colorsets,outter_imbalance_dict,inner_imbalance_dict,support_num,env,\
-                   Imbalance,NotEdges,colordict,nc_tuples,HardFlag,FixedEdges,FixedNonEdges,AddRemoveFlag,InDegOneFlag)
+    rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg = \
+            CreateRMIP(Nodes,Edges,EdgeWeights,ColorPairs,colorsets,outter_imbalance_dict,inner_imbalance_dict,support_num,env,\
+                   Imbalance,NotEdges,NEWeights,colordict,nc_tuples,HardFlag,FixedEdges,FixedNonEdges,AddRemoveFlag,InDegOneFlag)
 
 
     return rmip,rcons,rvars,setdict,colorsets,remove_edge,add_edge,node_balance_pos,node_balance_neg
 
-def rmip_optomize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg,rm_weight,add_weight,HardFlag,Solu_type,bal_weight=1):
-    
-    #need objective
-    if HardFlag:
-        if Solu_type=="Abs":
-            #abs version
-            w = rmip.addVar(vtype=gp.GRB.INTEGER, name="w")  
-            rmip.addConstr(w >= rm_weight * gp.quicksum(remove_edge.select('*','*')) - add_weight * gp.quicksum(add_edge.select('*','*')))
-            rmip.addConstr(w >= - rm_weight * gp.quicksum(remove_edge.select('*','*')) + add_weight * gp.quicksum(add_edge.select('*','*')))
-        elif Solu_type=="Linear":
-            obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
-                add_weight*gp.quicksum(add_edge.select('*','*'))
-    
-    else:
-        obj = (epsilon + rm_weight)*(gp.quicksum(remove_edge.select('*','*'))) + \
-            (epsilon + add_weight)*(gp.quicksum(add_edge.select('*','*'))) + \
-            bal_weight*(gp.quicksum(node_balance_pos.select('*','*')) + \
-               gp.quicksum(node_balance_neg.select('*','*'))) 
-        
-        
-    if Solu_type=="Abs":
-        #abs version
-        rmip.setObjective(w,GRB.MINIMIZE)
-    elif Solu_type=="Linear":
-        rmip.setObjective(obj,GRB.MINIMIZE)
+def rmip_optomize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,\
+                  node_balance_neg,rm_weight,add_weight,HardFlag,Solu_type,setdict,bal_weight=1):
     
     
+    #find the edge removes
+    E = setdict['E']
+    NE = setdict['NE']
+    E_W = setdict['E_W']
+    NE_W = setdict['NE_W']
+    
+    obj = sum(NE_W[i,j]*add_edge[i,j] for (i,j) in NE) + \
+        sum(E_W[i,j]*remove_edge[i,j] for (i,j) in E)
+    
+    rmip.setObjective(obj,GRB.MINIMIZE)
 
     #set the time limit -- not yet needed
     rmip.setParam("TimeLimit", 5*60)
@@ -370,8 +362,12 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
                        HardFlag=True,FixedEdges=[],FixedNonEdges=[],InDegOneFlag=True,\
                        RMOnly=False,prohibit=None,Save_info=True,NetX=False):
     
-    rmip,rcons,rvars,executionTime = rmip_optomize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg,rm_weight,add_weight,HardFlag,Solu_type,bal_weight=1)
+    rmip,rcons,rvars,executionTime = rmip_optomize(rmip,rcons,rvars,remove_edge,\
+                                                   add_edge,node_balance_pos,\
+                                                   node_balance_neg,rm_weight,add_weight,\
+                                                   HardFlag,Solu_type,setdict,bal_weight=1)
     
+
     
     #find the edge removes
     E = setdict['E']
@@ -540,6 +536,19 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
 #                         outfile = outpath+gf+'_'+cf+'a'+str(rm_weight)+'b'+str(add_weight) + '.ar.'
 #                     write_one_solution(gpath,cpath,rm_weight,add_weight,outfile,HardFlag)
  
+#HardFlag = True
+#InDegOneFlag=True
+#RMOnly = True
+#prohibit=None
+#Imbalance = 'David'
+
+#testwpath = '/Users/phillips/Documents/test/small_test.txt'
+#wcolorpath = '/Users/phillips/Documents/test/small.colors.txt'
+#woutpath = '/Users/phillips/Documents/test/outw.txt'
+#A,B,C,D,E,F,G,H,I = set_rmip(testwpath,wcolorpath,Imbalance,HardFlag,[],[],InDegOneFlag,\
+#                             False,prohibit)
+#solve_and_write(testwpath,wcolorpath,1,1,woutpath,A,B,C,D,E,F,G,H,I,HardFlag,\
+#                [],[],InDegOneFlag,RMOnly,prohibit,Save_info=True,NetX=True)
 
 
  
