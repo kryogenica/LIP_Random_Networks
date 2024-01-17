@@ -13,11 +13,16 @@ import time
 ##precision parameter
 epsilon = .001
 
+#DEPRECATED:
 #percentage of edge weights allowed for weight_mods to be 
-WM_perc = 1
+#WM_perc = 1
+
+##bound on how much a weight can be changed
+WM_bound = 2
 
 #this might need to be set in readdata. Right now a fixed constant
-NW_bound = 100
+#bound on how much a new weight can be set to
+NW_bound = 1
 
 charsep='\t'
 
@@ -30,7 +35,9 @@ def readdata(fname,colorfile,xlinks=None):
     
     #load starting network
     GraphData = pd.read_csv(fname,sep=charsep,index_col=[0,1],header=None)
-    
+    print(fname)
+    #directed graph!    
+
     #remove selfloops
     GraphData=GraphData[GraphData.index.get_level_values(0)!=GraphData.index.get_level_values(1)]
 
@@ -46,8 +53,7 @@ def readdata(fname,colorfile,xlinks=None):
     
     Edges,EdgeWeights = gp.multidict(EdgeDict)
     
-    
-            
+
     #make the node set
     Nodes = []
     for tup in Edges:
@@ -149,8 +155,8 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
     
     if WeightFlag:
         #these are modifications to the current weight, assumed integer
-        weight_mods = rmip.addVars(Edges,vtype=GRB.INTEGER,name='weight_mods')
-        weight_mods_abs = rmip.addVars(Edges,lb=0,vtype=GRB.INTEGER,name='weight_mods_abs')
+        weight_mods = rmip.addVars(Edges,lb=-GRB.INFINITY, vtype=GRB.INTEGER,name='weight_mods')
+        weight_mods_abs = rmip.addVars(Edges,lb=0,ub=WM_bound, vtype=GRB.INTEGER,name='weight_mods_abs')
         max_weight = max(EdgeWeights.values())
 
     #these are variables representing potential positive or negative color balances
@@ -165,7 +171,7 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
     if WeightFlag:
         #if an edge is added, these variables represent the weight added
         #assuming this is integer, nonnegative
-        new_weights=rmip.addVars(NotEdges,lb=0, vtype=GRB.INTEGER,name="new_weights")
+        new_weights=rmip.addVars(NotEdges,lb=0, ub=NW_bound, vtype=GRB.INTEGER,name="new_weights")
     
     
     #Bryant modified -- djp still needs to verify
@@ -193,21 +199,17 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
     atleast_one = []
     indeg_one = []
     
+    #bound constraints now controlled in variable declarations
     if WeightFlag:
-        weight_lbs = []
-        weight_ubs = []
-        newwts_bd = []
         weight_abs_cons=[]
-        weight_lbs.append(rmip.addConstrs(weight_mods[i,j]) >= -WM_perc*EdgeWeights[i,j] for [i,j] in Edges)
-        weight_ubs.append(rmip.addConstrs(weight_mods[i,j]) <= WM_perc*EdgeWeights[i,j] for [i,j] in Edges)
-        weight_abs_cons.append(rmip.addConstrs(weight_mods_abs[i,j]) == abs_(weight_mods[i,j]) for [i,j] in Edges)
-        newwts_bd.append(rmip.addConstrs(new_weights[i,j] <= max_weight for (i,j) in NotEdges))
-        
+        weight_abs_cons.append(rmip.addConstrs((weight_mods_abs[i,j] == abs_(weight_mods[i,j]) \
+                                               for [i,j] in Edges), name='weight_abs_bds'))
+
         
     #aux=[]
     n = len(Nodes)
 
-    if InDegOneFlag:
+    if InDegOneFlag and WeightFlag == False:
             indeg_one.append(rmip.addConstrs((sum((1-remove_edge[i,j]) for (i,j) in Edges if j == p) \
                                                 + sum(add_edge[i,j] for (i,j) in NotEdges if j == p) >= 1 for p in Nodes), name='indeg_one'))
 
@@ -222,25 +224,26 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
             #                         sum(add_edge[i,j] for (i,j) in NotEdges \
             #                             if j == q and i in D)
             #                         ) for (p,q) in colorpairs), name='color_balance'))
-            for (p,q) in colorpairs:
-                #A and B are lists of removed and added edges into p
-                relist_p = list((1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
-                aelist_p = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in D)
-                
+            for (p,q) in colorpairs:                
                 if WeightFlag:
-                    relist_p = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
+                    #remove edge and add edge variables are not needed for the 
+                    #weighted case the current way we do it
+                    #relist_p = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
+                    relist_p = list(EdgeWeights[i,j] for (i,j) in Edges if j == p and i in D)
                     #Fcreating the list of weight_mods into p, D is the new weights into p
                     wmlist_p = list(weight_mods[i,j] for (i,j) in Edges if j == p)
                     nwlist_p = list(new_weights[i,j] for (i,j) in NotEdges if j == p)              
-                
-                
-                #creating analogous lists for q
-                relist_q = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
-                aelist_q = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in D)
-                if WeightFlag:
-                    relist_q = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
+                    #relist_q = list(EdgeWeights[i,j]*(1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
+                    relist_q = list(EdgeWeights[i,j] for (i,j) in Edges if j == q and i in D)
                     wmlist_q = list(weight_mods[i,j] for (i,j) in Edges if j == q)
                     nwlist_q = list(new_weights[i,j] for (i,j) in NotEdges if j == q)
+                else:
+                    #A and B are lists of removed and added edges into p
+                    relist_p = list((1-remove_edge[i,j]) for (i,j) in Edges if j == p and i in D)
+                    aelist_p = list(add_edge[i,j] for (i,j) in NotEdges if j == p and i in D)
+                    #creating analogous lists for q
+                    relist_q = list((1-remove_edge[i,j]) for (i,j) in Edges if j == q and i in D)
+                    aelist_q = list(add_edge[i,j] for (i,j) in NotEdges if j == q and i in D)
                 
 
                 if WeightFlag: 
@@ -333,8 +336,8 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
                         # this enforces a valid constraint but still allows non-minimal                       
                         sblist = list(strict_balance[p,q,i] + strict_balance[q,p,i] for i in colordict.keys())
                     
-                    
-                    atleast_one.append(rmip.addConstr((quicksum(sblist) >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
+                    if WeightFlag == False:
+                        atleast_one.append(rmip.addConstr((quicksum(sblist) >= 1),name='atleast_one_'+str(p)+'_'+str(q)))
                     
                     
                     #this code will reject a correct solution 
@@ -386,7 +389,8 @@ def CreateRMIP(Nodes,Edges,EdgeWeights,colorpairs,colorsets,outer_imbalance_dict
            'nb_b_n':nodebalance_bounds_n,'FEl':FElist,'FNEl':FNElist,\
                'indeg_one':indeg_one}
         
-    
+    if WeightFlag:
+        rcons['wa'] = weight_abs_cons
 
         
     return rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,node_balance_neg
@@ -429,10 +433,13 @@ def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,\
         if WeightFlag:
             weight_mods_abs  = rvars['w_m_a']
             new_weights = rvars['n_w']
+
+#            obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
+#                add_weight*gp.quicksum(add_edge.select('*','*')) + \
+#                wm_weight*gp.quicksum(weight_mods_abs.select('*','*')) + \
+#                nw_weight*gp.quicksum(new_weights.select('*','*'))
             
-            obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
-                add_weight*gp.quicksum(add_edge.select('*','*')) + \
-                wm_weight*gp.quicksum(weight_mods_abs.select('*','*')) + \
+            obj = wm_weight*gp.quicksum(weight_mods_abs.select('*','*')) + \
                 nw_weight*gp.quicksum(new_weights.select('*','*'))
         else:
             obj = rm_weight*gp.quicksum(remove_edge.select('*','*')) + \
@@ -453,6 +460,7 @@ def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,\
 
     #optimize
     startTime_Prime = time.time()
+    rmip.write("/Users/phillips/Documents/test/wtf.lp")
     rmip.optimize()
     executionTime = round(time.time() - startTime_Prime,5)
 
@@ -497,17 +505,19 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
     if NetX==True:
         if feasible:
             for (i,j) in E:
-                if abs(re[i,j].x - 1) > epsilon:
-                    if WeightFlag:
+                if WeightFlag:
+                    if abs(EW[i,j] + w_m[i,j].x) > epsilon:
                         G_result.add_edge(i,j,weight=EW[i,j] +w_m[i,j].x)
-                    else:
+                else:
+                    if abs(re[i,j].x - 1) > epsilon:
                         G_result.add_edge(i, j)
     
             for (i,j) in NE:
-                if abs(ae[i,j].x - 1) < epsilon:
-                    if WeightFlag:
+                if WeightFlag:
+                    if n_w[i,j].x > epsilon:
                         G_result.add_edge(i,j,weight=n_w[i,j].x)
-                    else:
+                else:
+                    if abs(ae[i,j].x - 1) < epsilon:
                         G_result.add_edge(i, j)
     
     if Save_info==True:
@@ -518,37 +528,65 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
         
         if feasible:
             for (i,j) in E:
-                if abs(re[i,j].x - 1) < epsilon:
-                    sumremovals = sumremovals + 1
+                if WeightFlag:
+                    #sumremovals is the sum of absolute weight modification
+                    sumremovals = sumremovals + w_m_a[i,j].x
+                else:
+                    if abs(re[i,j].x - 1) < epsilon:
+                        sumremovals = sumremovals + 1
 
             for (i,j) in NE:
-                if abs(ae[i,j].x - 1) < epsilon:
-                    sumadds = sumadds + 1
+                if WeightFlag:
+                    #sumadds is the sum of the new weights
+                    sumadds = sumadds + n_w[i,j].x
+                else:
+                    if abs(ae[i,j].x - 1) < epsilon:
+                        sumadds = sumadds + 1
         
     
                 
         #print('Source Target Weight',file=gf)
-    
-        print(f'Total edges removed\n{sumremovals}',file=f)
-        print('Edges removed',file=f)
+        if WeightFlag:
+            print(f'Total absolute edge modifications:\n{sumremovals}',file=f)
+            print('Edges modified',file=f)            
+        else:
+            print(f'Total edges removed\n{sumremovals}',file=f)
+            print('Edges removed',file=f)
         EdgesRemoved = []
         if feasible:
             for (i,j) in E:
-                if abs(re[i,j].x - 1) < epsilon:
-                    print(f'{i} {j}',file=f)
-                    EdgesRemoved.append((i,j))
+                print(f"weight mod:{i} {j} {w_m[i,j].x}")
+                if WeightFlag:
+                    if w_m_a[i,j].x > epsilon:
+                        print(f'{i} {j} {w_m[i,j].x}',file=f)
+                        EdgesRemoved.append((i,j))
+                    if abs(EW[i,j]+w_m[i,j].x) > epsilon:
+                        print(f'actual weight: {i} {j} {EW[i,j]+w_m[i,j].x}')
                 else:
-                    print(f'{i} {j}',file=gf)
-    
-        print(f'Total edges added\n{sumadds}',file=f)
-        print('Edges added',file=f)
+                    if abs(re[i,j].x - 1) < epsilon:
+                        print(f'{i} {j}',file=f)
+                        EdgesRemoved.append((i,j))
+                    else:
+                        print(f'{i} {j}',file=gf)
+        if WeightFlag:
+            print(f'Total weight of edges added\n{sumadds}',file=f)
+            print('Edges added',file=f)            
+        else:
+            print(f'Total edges added\n{sumadds}',file=f)
+            print('Edges added',file=f)
         EdgesAdded = []
         if feasible:
             for (i,j) in NE:
-                if abs(ae[i,j].x - 1) < epsilon:
-                    print(f'{i} {j}',file=f)
-                    print(f'{i} {j}',file=gf)
-                    EdgesAdded.append((i,j))
+                if WeightFlag:
+                    if n_w[i,j].x > epsilon:
+                        print(f'{i} {j} {n_w[i,j].x}',file=f)
+                        print(f'{i} {j} {n_w[i,j].x}',file=gf)   
+                        EdgesAdded.append((i,j))
+                else:
+                    if abs(ae[i,j].x - 1) < epsilon:
+                        print(f'{i} {j}',file=f)
+                        print(f'{i} {j}',file=gf)   
+                        EdgesAdded.append((i,j))
     
     
         CP = setdict['CP']
