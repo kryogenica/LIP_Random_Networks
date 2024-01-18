@@ -35,7 +35,7 @@ def readdata(fname,colorfile,xlinks=None):
     
     #load starting network
     GraphData = pd.read_csv(fname,sep=charsep,index_col=[0,1],header=None)
-    print(fname)
+    #print(fname)
     #directed graph!    
 
     #remove selfloops
@@ -460,7 +460,6 @@ def rmip_optimize(rmip,rcons,rvars,remove_edge,add_edge,node_balance_pos,\
 
     #optimize
     startTime_Prime = time.time()
-    rmip.write("/Users/phillips/Documents/test/wtf.lp")
     rmip.optimize()
     executionTime = round(time.time() - startTime_Prime,5)
 
@@ -555,13 +554,13 @@ def solve_and_write(graphpath,colorpath,rm_weight,add_weight,fname,rmip,rcons,\
         EdgesRemoved = []
         if feasible:
             for (i,j) in E:
-                print(f"weight mod:{i} {j} {w_m[i,j].x}")
+                #print(f"weight mod:{i} {j} {w_m[i,j].x}")
                 if WeightFlag:
                     if w_m_a[i,j].x > epsilon:
                         print(f'{i} {j} {w_m[i,j].x}',file=f)
                         EdgesRemoved.append((i,j))
-                    if abs(EW[i,j]+w_m[i,j].x) > epsilon:
-                        print(f'actual weight: {i} {j} {EW[i,j]+w_m[i,j].x}')
+                    #if abs(EW[i,j]+w_m[i,j].x) > epsilon:
+                        #print(f'actual weight: {i} {j} {EW[i,j]+w_m[i,j].x}')
                 else:
                     if abs(re[i,j].x - 1) < epsilon:
                         print(f'{i} {j}',file=f)
